@@ -14,11 +14,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+/// <reference path="./typescript/he/index.d.ts" />
 /// <reference path="./typescript/jquery.d.ts" />
 /// <reference path="./typescript/papaparse.d.ts" />
 /// <reference path="./typescript/d3.d.ts" />
 /// <reference path="./typescript/d3pie.d.ts" />
 /// <reference path="./typescript/navigo.d.ts" />
+/// <reference path="./typescript/continents.d.ts" />
 ;
 ;
 ;
@@ -170,6 +172,8 @@ class CSRankings {
         this.acmfellow = {};
         /* Map institution to (non-US) region. */
         this.countryInfo = {};
+        /* Map institution to (non-US) abbreviation. */
+        this.countryAbbrv = {};
         /* Map name to home page. */
         this.homepages = {};
         /* Set to true for "dense rankings" vs. "competition rankings". */
@@ -248,9 +252,9 @@ class CSRankings {
             }).resolve();
             this.displayProgress(4);
             this.countAuthorAreas();
-            yield this.loadCountryInfo(this.countryInfo);
+            yield this.loadCountryInfo(this.countryInfo, this.countryAbbrv);
             this.addListeners();
-            /* CSRankings.geoCheck(); */
+            CSRankings.geoCheck();
             this.rank();
         }))();
     }
@@ -287,20 +291,29 @@ class CSRankings {
         name = name.replace(/ II/g, "_II");
         name = name.replace(/ III/g, "_III");
         name = name.replace(/'|\-|\./g, "=");
-        name = name.replace(/Á/g, "=Aacute=");
-        name = name.replace(/á/g, "=aacute=");
-        name = name.replace(/è/g, "=egrave=");
-        name = name.replace(/é/g, "=eacute=");
-        name = name.replace(/í/g, "=iacute=");
-        name = name.replace(/ï/g, "=iuml=");
-        name = name.replace(/ó/g, "=oacute=");
-        name = name.replace(/ç/g, "=ccedil=");
-        name = name.replace(/ä/g, "=auml=");
-        name = name.replace(/ö/g, "=ouml=");
-        name = name.replace(/ø/g, "=oslash=");
-        name = name.replace(/Ö/g, "=Ouml=");
-        name = name.replace(/ü/g, "=uuml=");
-        name = name.replace(/ß/g, "=szlig=");
+        // Now replace diacritics.
+        name = he.encode(name, { 'useNamedReferences': true, 'allowUnsafeSymbols': true });
+        name = name.replace(/&/g, "=");
+        name = name.replace(/;/g, "=");
+        if (false) {
+            name = name.replace(/Á/g, "=Aacute=");
+            name = name.replace(/á/g, "=aacute=");
+            name = name.replace(/è/g, "=egrave=");
+            name = name.replace(/é/g, "=eacute=");
+            name = name.replace(/í/g, "=iacute=");
+            name = name.replace(/ï/g, "=iuml=");
+            name = name.replace(/ó/g, "=oacute=");
+            name = name.replace(/Ç/g, "=Ccedil=");
+            name = name.replace(/ç/g, "=ccedil=");
+            name = name.replace(/ä/g, "=auml=");
+            name = name.replace(/ö/g, "=ouml=");
+            name = name.replace(/ø/g, "=oslash=");
+            name = name.replace(/Ö/g, "=Ouml=");
+            name = name.replace(/Ü/g, "=Uuml=");
+            name = name.replace(/ü/g, "=uuml=");
+            name = name.replace(/ß/g, "=szlig=");
+            name = name.replace(/ý/g, "=yacute=");
+        }
         let splitName = name.split(" ");
         let lastName = splitName[splitName.length - 1];
         let disambiguation = "";
@@ -314,7 +327,8 @@ class CSRankings {
         let newName = splitName.join(" ");
         newName = newName.replace(/\s/g, "_");
         newName = newName.replace(/\-/g, "=");
-        let str = "https://dblp.uni-trier.de/pers/hd";
+        newName = encodeURIComponent(newName);
+        let str = "https://dblp.org/pers/hd";
         const lastInitial = lastName[0].toLowerCase();
         str += "/" + lastInitial + "/" + lastName + ":" + newName;
         return str;
@@ -571,7 +585,7 @@ class CSRankings {
             s += "<br />";
             count += 1;
         });
-        $("#progress").html(s);
+        document.querySelector("#progress").innerHTML = s;
     }
     loadTuring(turing) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -607,7 +621,7 @@ class CSRankings {
             }
         });
     }
-    loadCountryInfo(countryInfo) {
+    loadCountryInfo(countryInfo, countryAbbrv) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield new Promise((resolve) => {
                 Papa.parse(this.countryinfoFile, {
@@ -621,6 +635,7 @@ class CSRankings {
             const ci = data;
             for (let info of ci) {
                 countryInfo[info.institution] = info.region;
+                countryAbbrv[info.institution] = info.countryabbrv;
             }
         });
     }
@@ -668,8 +683,33 @@ class CSRankings {
     }
     inRegion(dept, regions) {
         switch (regions) {
-            case "USA":
+            case "us":
                 if (dept in this.countryInfo) {
+                    return false;
+                }
+                break;
+            case "at":
+            case "au":
+            case "br":
+            case "ca":
+            case "ch":
+            case "cn":
+            case "de":
+            case "dk":
+            case "es":
+            case "fr":
+            case "gr":
+            case "hk":
+            case "il":
+            case "in":
+            case "it":
+            case "jp":
+            case "kr":
+            case "nl":
+            case "nz":
+            case "tr":
+            case "uk":
+                if (this.countryAbbrv[dept] != regions) {
                     return false;
                 }
                 break;
@@ -678,14 +718,6 @@ class CSRankings {
                     return false;
                 }
                 if (this.countryInfo[dept] != "europe") {
-                    return false;
-                }
-                break;
-            case "canada":
-                if (!(dept in this.countryInfo)) { // USA
-                    return false;
-                }
-                if (this.countryInfo[dept] != "canada") {
                     return false;
                 }
                 break;
@@ -965,7 +997,7 @@ class CSRankings {
                     p += '<span class="note" title="Note">[' + href + this.note[name] + '</a>' + ']</span>&nbsp;';
                 }
                 if (this.acmfellow.hasOwnProperty(name)) {
-                    p += '<span title="ACM Fellow"><img alt="ACM Fellow" src="' +
+                    p += `<span title="ACM Fellow (${this.acmfellow[name]})"><img alt="ACM Fellow" src="` +
                         this.acmfellowImage + '"></span>&nbsp;';
                 }
                 if (this.turing.hasOwnProperty(name)) {
@@ -1018,10 +1050,12 @@ class CSRankings {
         }
         return univtext;
     }
-    buildOutputString(numAreas, deptCounts, univtext, minToRank) {
+    buildOutputString(numAreas, countryAbbrv, deptCounts, univtext, minToRank) {
         let s = this.makePrologue();
         /* Show the top N (with more if tied at the end) */
-        s = s + '<thead><tr><th align="left"><font color="#777">#</font></th><th align="left"><font color="#777">Institution</font></th><th align="right">'
+        s = s + '<thead><tr><th align="left"><font color="#777">#</font></th><th align="left"><font color="#777">Institution</font>'
+            + '&nbsp;'.repeat(20) /* Hopefully max length of an institution. */
+            + '</th><th align="right">'
             + '<abbr title="Geometric mean count of papers published across all areas."><font color="#777">Count</font>'
             + '</abbr></th><th align="right">&nbsp;<abbr title="Number of faculty who have published in these areas."><font color="#777">Faculty</font>'
             + '</abbr></th></th></tr></thead>';
@@ -1060,12 +1094,19 @@ class CSRankings {
                     }
                 }
                 const esc = escape(dept);
-                s += "\n<tr><td>" + rank + "&nbsp;</td>";
+                s += "\n<tr><td>" + rank;
+                // Print spaces to hold up to 4 digits of ranked schools.
+                s += "&nbsp;".repeat(4 - Math.ceil(Math.log10(rank)));
+                s += "</td>";
                 s += "<td>"
                     + "<span class=\"hovertip\" onclick=\"csr.toggleFaculty('" + esc + "');\" id=\"" + esc + "-widget\">"
                     + this.RightTriangle
                     + "</span>";
-                s += "&nbsp;" + dept + "&nbsp;"
+                let abbrv = "us";
+                if (dept in countryAbbrv) {
+                    abbrv = countryAbbrv[dept];
+                }
+                s += "&nbsp;" + dept + `&nbsp;<img src="/flags/${abbrv}.png">&nbsp;`
                     + "<span class=\"hovertip\" onclick=\"csr.toggleChart('" + esc + "');\" id=\"" + esc + "-chartwidget\">"
                     + this.PieChart + "</span>";
                 s += "</td>";
@@ -1140,13 +1181,13 @@ class CSRankings {
         this.computeStats(deptNames, numAreas, currentWeights);
         const univtext = this.buildDropDown(deptNames, facultycount, facultyAdjustedCount);
         /* Start building up the string to output. */
-        const s = this.buildOutputString(numAreas, deptCounts, univtext, CSRankings.minToRank);
+        const s = this.buildOutputString(numAreas, this.countryAbbrv, deptCounts, univtext, CSRankings.minToRank);
         let stop = performance.now();
         console.log("Before render: rank took " + (stop - start) + " milliseconds.");
         /* Finally done. Redraw! */
-        $("#success").html(s);
+        document.getElementById("success").innerHTML = s;
         $("div").scroll(function () {
-            //		console.log("scrollTop = " + this.scrollTop + ", clientHeight = " + this.clientHeight + ", scrollHeight = " + this.scrollHeight);
+            // console.log("scrollTop = " + this.scrollTop + ", clientHeight = " + this.clientHeight + ", scrollHeight = " + this.scrollHeight);
             // If we are nearly at the bottom, update the minimum.
             if (this.scrollTop + this.clientHeight > this.scrollHeight - 50) {
                 let t = CSRankings.updateMinimum(this);
@@ -1303,6 +1344,26 @@ class CSRankings {
             start += '&' + region;
         }
         return start;
+    }
+    static geoCheck() {
+        navigator.geolocation.getCurrentPosition((position) => {
+            const continent = whichContinent(position.coords.latitude, position.coords.longitude);
+            let regions = document.getElementById("regions");
+            switch (continent) {
+                case "northamerica":
+                    return;
+                case "europe":
+                case "asia":
+                case "southamerica":
+                case "africa":
+                    regions.value = continent;
+                    break;
+                default:
+                    regions.value = "world";
+                    break;
+            }
+            CSRankings.getInstance().rank();
+        });
     }
     /*
       public static geoCheck(): void {
@@ -1473,16 +1534,22 @@ class CSRankings {
             if (!(area in CSRankings.parentMap)) {
                 // Not a child.
                 const widget = document.getElementById(area + '-widget');
-                widget.addEventListener("click", () => {
-                    this.toggleConferences(area);
-                });
+                if (widget) {
+                    widget.addEventListener("click", () => {
+                        this.toggleConferences(area);
+                    });
+                }
             }
         }
         // Initialize callbacks for area checkboxes.
         for (let i = 0; i < this.fields.length; i++) {
             const str = 'input[name=' + this.fields[i] + ']';
             const field = this.fields[i];
-            $(str).click(() => {
+            const fieldElement = document.getElementById(this.fields[i]);
+            if (!fieldElement) {
+                continue;
+            }
+            fieldElement.addEventListener("click", () => {
                 let updateURL = true;
                 if (field in CSRankings.parentMap) {
                     // Child:
@@ -1562,7 +1629,7 @@ CSRankings.minToRank = 30; // initial number to rank --> should be enough to ena
 CSRankings.areas = [];
 CSRankings.topLevelAreas = {};
 CSRankings.topTierAreas = {};
-CSRankings.regions = ["USA", "europe", "canada", "northamerica", "southamerica", "australasia", "asia", "africa", "world"];
+CSRankings.regions = ["us", "europe", "ca", "northamerica", "southamerica", "australasia", "asia", "africa", "world"];
 CSRankings.nameMatcher = new RegExp('(.*)\\s+\\[(.*)\\]'); // Matches names followed by [X] notes.
 CSRankings.parentIndex = {}; // For color lookups
 CSRankings.parentMap = {
@@ -1663,7 +1730,7 @@ CSRankings.noteMap = {
     'INF': 'https://www.cis.mpg.de/mpi-inf/',
     'IS': 'https://www.cis.mpg.de/is/',
     'MG': 'https://www.cis.mpg.de/molgen/',
-    'SP': 'https://www.cis.mpg.de/mpi-for-cyber-for-security-and-privacy/',
+    'SP': 'https://www.cis.mpg.de/mpi-for-security-and-privacy/',
     'SWS': 'https://www.cis.mpg.de/mpi-sws/'
 };
 var csr = new CSRankings();
